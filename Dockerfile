@@ -2,8 +2,10 @@
 FROM nvcr.io/nvidia/l4t-base:r32.7.1
 
 ENV DEBIAN_FRONTEND=noninteractive
+# Impede que o Git trave esperando autenticação em ambiente não interativo
+ENV GIT_TERMINAL_PROMPT=0
 
-# Instala dependências do sistema e ferramentas de compilação
+# Instala dependências do sistema
 RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-dev \
@@ -13,8 +15,7 @@ RUN apt-get update && apt-get install -y \
     g++ \
     make \
     git \
-    libatlas-base-dev \
-    portaudio19-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -22,11 +23,13 @@ WORKDIR /app
 # Atualiza ferramentas base do Python
 RUN pip3 install --upgrade pip setuptools wheel
 
-# Instala o SDK do Edge Impulse direto do repositório Git e demais dependências
-RUN pip3 install git+https://github.com/edgeimpulse/edge-impulse-linux-python.git
+# Clona o SDK do Edge Impulse diretamente e faz a instalação local
+RUN pip3 install edge_impulse_linux
+
+# Instala requisições HTTP e controle de GPIO da Jetson
 RUN pip3 install requests Jetson.GPIO
 
-# Copia os arquivos do projeto
+# Copia os arquivos da aplicação
 COPY modelo_epi.eim /app/
 COPY catraca.py /app/
 
