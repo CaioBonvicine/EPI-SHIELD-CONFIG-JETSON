@@ -33,7 +33,10 @@ RUN pip3 install requests Jetson.GPIO
 COPY modelo_epi.eim /app/
 COPY catraca.py /app/
 
+# ... (resto do seu Dockerfile) ...
+
 # Garante permissão de execução no binário da IA
 RUN chmod +x /app/modelo_epi.eim
 
+# O -u garante que os prints saiam na hora no terminal
 CMD ["python3", "-u", "catraca.py"]
