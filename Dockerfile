@@ -36,4 +36,4 @@ COPY catraca.py /app/
 # Garante permissão de execução no binário da IA
 RUN chmod +x /app/modelo_epi.eim
 
-CMD ["python3", "catraca.py"]
+CMD ["python3", "-u", "catraca.py"]
