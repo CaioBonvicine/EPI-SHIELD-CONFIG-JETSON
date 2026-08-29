@@ -47,7 +47,8 @@ def main():
         print("[1] GPIO OK")
 
         print("[2] Carregando modelo...")
-        runner = ImageImpulseRunner("modelo_epi.eim")
+        # CORRIGIDO: Nome atualizado para modelo_epiV2.eim
+        runner = ImageImpulseRunner("modelo_epiV2.eim")
         model_info = runner.init()
         print(f"[2] Modelo OK: {model_info['project']}")
 

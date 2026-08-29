@@ -2,8 +2,8 @@
 FROM nvcr.io/nvidia/l4t-base:r32.7.1
 
 ENV DEBIAN_FRONTEND=noninteractive
-# Impede que o Git trave esperando autenticação em ambiente não interativo
 ENV GIT_TERMINAL_PROMPT=0
+ENV OPENBLAS_CORETYPE=ARMV8
 
 # Instala dependências do sistema
 RUN apt-get update && apt-get install -y \
@@ -23,20 +23,14 @@ WORKDIR /app
 # Atualiza ferramentas base do Python
 RUN pip3 install --upgrade pip setuptools wheel
 
-# Clona o SDK do Edge Impulse diretamente e faz a instalação local
-RUN pip3 install edge_impulse_linux
+# Instala o SDK do Edge Impulse e bibliotecas do projeto
+RUN pip3 install edge_impulse_linux requests Jetson.GPIO
 
-# Instala requisições HTTP e controle de GPIO da Jetson
-RUN pip3 install requests Jetson.GPIO
-
-# Copia os arquivos da aplicação
-COPY modelo_epi.eim /app/
+# CORRIGIDO: Copia o modelo novo para o container
+COPY modelo_epiV2.eim /app/
 COPY catraca.py /app/
 
-# ... (resto do seu Dockerfile) ...
+# CORRIGIDO: Concede permissão de execução no novo modelo
+RUN chmod +x /app/modelo_epiV2.eim
 
-# Garante permissão de execução no binário da IA
-RUN chmod +x /app/modelo_epi.eim
-
-# O -u garante que os prints saiam na hora no terminal
 CMD ["python3", "-u", "catraca.py"]
