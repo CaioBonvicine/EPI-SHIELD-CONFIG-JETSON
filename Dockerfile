@@ -1,4 +1,4 @@
-# Usa a imagem base do L4T (JetPack 4.6 / r32.7.1)
+# Usa a imagem base do L4T compatível com JetPack 4.6.x / r32.7.1
 FROM nvcr.io/nvidia/l4t-base:r32.7.1
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -11,6 +11,10 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     libopencv-dev \
     python3-opencv \
+    libatlas-base-dev \
+    libportaudio2 \
+    libportaudiocpp0 \
+    portaudio19-dev \
     gcc \
     g++ \
     make \
@@ -20,17 +24,15 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Atualiza ferramentas base do Python
-RUN pip3 install --upgrade pip setuptools wheel
+# Instala o SDK do Edge Impulse e o controle de GPIO da Jetson
+RUN pip3 install --no-cache-dir edge_impulse_linux Jetson.GPIO
 
-# Instala o SDK do Edge Impulse e bibliotecas do projeto
-RUN pip3 install edge_impulse_linux requests Jetson.GPIO
-
-# CORRIGIDO: Copia o modelo novo para o container
+# Copia os arquivos da aplicação
 COPY modelo_epiV2.eim /app/
 COPY catraca.py /app/
 
-# CORRIGIDO: Concede permissão de execução no novo modelo
+# Concede permissão de execução ao modelo
 RUN chmod +x /app/modelo_epiV2.eim
 
+# Executa a aplicação
 CMD ["python3", "-u", "catraca.py"]
