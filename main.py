@@ -1,3 +1,10 @@
+import sys
+from unittest.mock import MagicMock
+
+# MOCK DO PYAUDIO: Engana o edge_impulse_linux para que ele não quebre 
+# ao tentar carregar dependências de áudio, já que não temos root para instalá-las.
+sys.modules['pyaudio'] = MagicMock()
+
 import cv2
 import os
 import time
