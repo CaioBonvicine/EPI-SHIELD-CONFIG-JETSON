@@ -1,0 +1,4 @@
+edge_impulse_linux
+python-dotenv
+gpiozero
+opencv-python
