@@ -15,7 +15,7 @@ from edge_impulse_linux.image import ImageImpulseRunner
 # Carrega variáveis
 load_dotenv()
 MODEL_PATH = os.getenv("MODEL_PATH", "./modelo.eim")
-GPIO_PIN = int(os.getenv("GPIO_PIN", 17))
+GPIO_PIN = int(os.getenv("GPIO_PIN", 18))
 THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", 0.8))
 TARGET_LABEL = os.getenv("TARGET_LABEL", "vest") 
 OPEN_TIME = float(os.getenv("OPEN_DURATION", 3.0))
