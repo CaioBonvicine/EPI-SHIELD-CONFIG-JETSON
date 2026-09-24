@@ -1,25 +1,27 @@
-from gpiozero import Servo
+import RPi.GPIO as GPIO
 from time import sleep
 
-# Configura o servo conectado ao GPIO 18 (Pino físico 12)
-# Os parâmetros min_pulse_width e max_pulse_width ajustam o range para a maioria dos servos comuns (como o SG90)
-servo = Servo(18, min_pulse_width=0.5/1000, max_pulse_width=2.5/1000)
+# Configuração dos pinos
+servo_pin = 18
 
-print("Iniciando teste do servo. Pressione Ctrl+C para parar.")
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(servo_pin, GPIO.OUT)
+
+# Configura o PWM com 50Hz (frequência padrão para servomotores)
+pwm = GPIO.PWM(servo_pin, 50)
+pwm.start(0)  # Inicia com duty cycle 0 (sem enviar pulso forçado)
 
 try:
-    while True:
-        print("Indo para a posição MÍNIMA (-1)")
-        servo.min()
-        sleep(1)
-        
-        print("Indo para a posição CENTRAL (0)")
-        servo.mid()
-        sleep(1)
-        
-        print("Indo para a posição MÁXIMA (1)")
-        servo.max()
-        sleep(1)
+    print("Movendo o servo para 90 graus...")
+    
+    # Para a maioria dos servos, 90 graus fica em torno de 7.5% de duty cycle
+    # (pode variar levemente entre 7.0 e 8.0 dependendo do modelo)
+    pwm.ChangeDutyCycle(7.5)
+    sleep(1)  # Tempo para o servo alcançar a posição
 
-except KeyboardInterrupt:
-    print("\nTeste encerrado pelo usuário.")
+finally:
+    # Para o sinal PWM para evitar que o servo fique "forçando" ou tremendo
+    pwm.ChangeDutyCycle(0)
+    pwm.stop()
+    GPIO.cleanup()
+    print("Posição atingida e conexões limpas.")
