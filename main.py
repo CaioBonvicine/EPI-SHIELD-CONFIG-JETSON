@@ -55,7 +55,7 @@ def main():
         frames_lidos = 0 # Contador para sabermos se a câmera realmente funcionou
 
         for res, img in runner.classifier(CAMERA_ID):
-            frames_lidos += 1import sys
+            frames_lidos += import sys
 from unittest.mock import MagicMock
 
 # MOCK DO PYAUDIO: Engana o edge_impulse_linux
