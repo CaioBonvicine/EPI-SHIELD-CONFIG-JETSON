@@ -13,7 +13,7 @@ pwm.start(0)  # Inicia desativado
 
 try:
     print("Indo para a posição inicial de 0 graus...")
-    pwm.ChangeDutyCycle(-1)  # 2.5% = 0 graus
+    pwm.ChangeDutyCycle(0)  # 2.5% = 0 graus
     sleep(1)
     
     print("Abrindo até 90 graus...")
