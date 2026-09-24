@@ -22,7 +22,7 @@ GPIO_PIN = int(os.getenv("GPIO_PIN", 18))
 THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", 0.8))
 TARGET_LABEL = os.getenv("TARGET_LABEL", "vest") 
 OPEN_TIME = float(os.getenv("OPEN_DURATION", 3.0))
-CAMERA_ID = int(os.getenv("CAMERA_ID", 0))
+CAMERA_ID = 0 # Deixado 0 fixo, pois o teste comprovou que funciona
 
 # Configuração do Servo Motor
 PULSO_ABERTO = 0.0020
@@ -52,14 +52,24 @@ def main():
         print(f"Modelo carregado: {model_info['project']['owner']} / {model_info['project']['name']}")
         print("Iniciando câmera... Pressione a tecla 'q' na janela do vídeo para sair.")
         
-        frames_lidos = 0 # Contador para sabermos se a câmera realmente funcionou
+        # INICIALIZAÇÃO MANUAL DA CÂMERA COM OPENCV (Contornando o bug do Edge Impulse)
+        cap = cv2.VideoCapture(CAMERA_ID, cv2.CAP_V4L2)
+        if not cap.isOpened():
+            print(f"ERRO: Não foi possível abrir a câmera {CAMERA_ID} com o OpenCV.")
+            return
 
-        for res, img in runner.classifier(CAMERA_ID):
-            frames_lidos += 1
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                print("Falha ao ler frame. Tentando novamente...")
+                time.sleep(0.1)
+                continue
+            
             vest_detectada = False
             
-            # A imagem do Edge Impulse vem em RGB, o OpenCV usa BGR para exibir na tela
-            img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+            # Prepara a imagem e faz a IA classificar o frame capturado manualmente
+            features, img_processada = runner.get_features_from_image(frame)
+            res = runner.classify(features)
             
             # Verifica detecção de objetos e DESENHA NA TELA
             if "bounding_boxes" in res["result"]:
@@ -68,25 +78,24 @@ def main():
                     conf = bb["value"]
                     x, y, w, h = bb["x"], bb["y"], bb["width"], bb["height"]
                     
-                    # Desenha o quadrado: Verde para a vest, Vermelho para outros objetos
+                    # Desenha o quadrado
                     cor = (0, 255, 0) if label == TARGET_LABEL else (0, 0, 255)
-                    cv2.rectangle(img_bgr, (x, y), (x + w, y + h), cor, 2)
-                    cv2.putText(img_bgr, f"{label} {conf:.2f}", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, cor, 2)
+                    cv2.rectangle(img_processada, (x, y), (x + w, y + h), cor, 2)
+                    cv2.putText(img_processada, f"{label} {conf:.2f}", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, cor, 2)
 
                     if label == TARGET_LABEL and conf >= THRESHOLD:
                         vest_detectada = True 
 
-            # Verifica classificação de imagem inteira
+            # Verifica classificação de imagem inteira (fallback)
             elif "classification" in res["result"]:
                 predictions = res["result"]["classification"]
                 if TARGET_LABEL in predictions and predictions[TARGET_LABEL] >= THRESHOLD:
                     vest_detectada = True
-                    cv2.putText(img_bgr, f"{TARGET_LABEL} DETECTADA", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    cv2.putText(img_processada, f"{TARGET_LABEL} DETECTADA", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
             # --- EXIBE A JANELA DE VÍDEO ---
-            cv2.imshow("EPI-SHIELD - Monitoramento", img_bgr)
+            cv2.imshow("EPI-SHIELD - Monitoramento", img_processada)
             
-            # Espera 1 milissegundo para atualizar a janela. Se apertar 'q', sai do loop.
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
@@ -107,15 +116,14 @@ def main():
                         mover_servo(PULSO_FECHADO)
                         catraca_aberta = False
 
-        if frames_lidos == 0:
-            print(f"\nERRO: Nenhum frame foi lido! A IA não encontrou nenhuma câmera na porta {CAMERA_ID}.")
-            print("Tente plugar a câmera em outra porta USB ou mude o CAMERA_ID para 1 ou 2 no arquivo .env")
-
     finally:
+        # Fecha os processos de vídeo de forma segura
+        if 'cap' in locals() and cap.isOpened():
+            cap.release()
         if runner:
             runner.stop()
         
-        cv2.destroyAllWindows() # Garante que a janela de vídeo será fechada
+        cv2.destroyAllWindows()
         mover_servo(PULSO_FECHADO)
         print("\nSistema encerrado. Catraca travada.")
 
