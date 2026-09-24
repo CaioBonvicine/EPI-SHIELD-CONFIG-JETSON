@@ -1,37 +1,45 @@
 import sys
 from unittest.mock import MagicMock
 
-# MOCK DO PYAUDIO: Engana o edge_impulse_linux para que ele não quebre 
-# ao tentar carregar dependências de áudio, já que não temos root para instalá-las.
+# MOCK DO PYAUDIO: Engana o edge_impulse_linux
 sys.modules['pyaudio'] = MagicMock()
 
 import cv2
 import os
 import time
 from dotenv import load_dotenv
-from gpiozero import Servo
+from gpiozero import OutputDevice
 from edge_impulse_linux.image import ImageImpulseRunner
 
 # Carrega variáveis
 load_dotenv()
 MODEL_PATH = os.getenv("MODEL_PATH", "./modelo.eim")
-GPIO_PIN = int(os.getenv("GPIO_PIN", 18))
+GPIO_PIN = int(os.getenv("GPIO_PIN", 18)) # Mantendo no 18 
 THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", 0.8))
 TARGET_LABEL = os.getenv("TARGET_LABEL", "vest") 
 OPEN_TIME = float(os.getenv("OPEN_DURATION", 3.0))
 CAMERA_ID = int(os.getenv("CAMERA_ID", 0))
 
-# Configuração dos limites do Servo Motor (valores de -1.0 a 1.0)
-SERVO_OPEN = float(os.getenv("SERVO_OPEN_VALUE", 1.0))
-SERVO_CLOSE = float(os.getenv("SERVO_CLOSE_VALUE", -1.0))
+# Para criar o PWM manualmente, usamos segundos ao invés de -1.0 a 1.0.
+# Servos motores comuns funcionam com ciclos de 20ms (50Hz).
+# 1.0 ms (0.001s) = Posição mínima (Fechado)
+# 2.0 ms (0.002s) = Posição máxima (Aberto)
+PULSO_ABERTO = 0.0020
+PULSO_FECHADO = 0.0010
 
-# Inicializa o pino do servo
-catraca_servo = Servo(GPIO_PIN)
+# Usa a saída digital comum (sempre suportada), driblando o erro do PWM
+catraca_pino = OutputDevice(GPIO_PIN)
 
-def mover_servo(valor_posicao):
-    catraca_servo.value = valor_posicao
-    time.sleep(0.5) # Dá meio segundo para a mecânica do motor girar fisicamente
-    catraca_servo.value = None # Desliga o sinal PWM para o motor não ficar "tremendo"
+def mover_servo(tempo_pulso):
+    """
+    Gera o sinal PWM manualmente (Bit-Banging) sem depender das bibliotecas do sistema.
+    Envia pulsos a 50Hz durante 0.5 segundos (25 ciclos).
+    """
+    for _ in range(25):
+        catraca_pino.on()
+        time.sleep(tempo_pulso)
+        catraca_pino.off()
+        time.sleep(0.020 - tempo_pulso) # Completa o ciclo de 20ms
 
 def main():
     if not os.path.exists(MODEL_PATH):
@@ -41,7 +49,7 @@ def main():
     runner = ImageImpulseRunner(MODEL_PATH)
     
     # Garante que a catraca comece fisicamente travada ao rodar o script
-    mover_servo(SERVO_CLOSE)
+    mover_servo(PULSO_FECHADO)
     catraca_aberta = False
     ultimo_momento_visto = 0.0
     
@@ -75,7 +83,7 @@ def main():
                 
                 if not catraca_aberta:
                     print(f"[{TARGET_LABEL}] detectado! Abrindo catraca (Servo)...")
-                    mover_servo(SERVO_OPEN)
+                    mover_servo(PULSO_ABERTO)
                     catraca_aberta = True
                     
             else:
@@ -84,7 +92,7 @@ def main():
                     
                     if tempo_sem_ver >= OPEN_TIME:
                         print(f"[{TARGET_LABEL}] ausente por {OPEN_TIME}s. Fechando catraca (Servo)...")
-                        mover_servo(SERVO_CLOSE)
+                        mover_servo(PULSO_FECHADO)
                         catraca_aberta = False
 
     finally:
@@ -92,7 +100,7 @@ def main():
             runner.stop()
         
         # Garante a segurança: trava a catraca antes do script fechar
-        mover_servo(SERVO_CLOSE)
+        mover_servo(PULSO_FECHADO)
         print("\nSistema encerrado. Catraca travada.")
 
 if __name__ == "__main__":
