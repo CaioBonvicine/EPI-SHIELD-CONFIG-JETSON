@@ -22,7 +22,7 @@ GPIO_PIN = int(os.getenv("GPIO_PIN", 18))
 THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", 0.8))
 TARGET_LABEL = os.getenv("TARGET_LABEL", "vest") 
 OPEN_TIME = float(os.getenv("OPEN_DURATION", 3.0))
-CAMERA_ID = int(os.getenv("CAMERA_ID", 0))
+CAMERA_ID = int(os.getenv("CAMERA_ID", 1))
 
 # Configuração do Servo Motor
 PULSO_ABERTO = 0.0020
