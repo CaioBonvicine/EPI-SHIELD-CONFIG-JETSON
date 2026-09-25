@@ -11,48 +11,56 @@ sys.modules['pyaudio'] = MagicMock()
 import cv2
 import os
 import time
-import RPi.GPIO as GPIO  # MUDANÇA: Usando RPi.GPIO em vez de gpiozero
+import pigpio  # MUDANÇA: Usando pigpio
 from dotenv import load_dotenv
 from edge_impulse_linux.image import ImageImpulseRunner
 
-# Carrega variáveis
+# Carrega variáveis do .env
 load_dotenv()
 MODEL_PATH = os.getenv("MODEL_PATH", "./epi-shield-v2.eim")
-GPIO_PIN = int(os.getenv("GPIO_PIN", 18))
+GPIO_PIN = int(os.getenv("GPIO_PIN", 18)) # BCM 18 é Pino Físico 12, ok para PWM0
 THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", 0.85))
 TARGET_LABEL = os.getenv("TARGET_LABEL", "vest") 
 OPEN_TIME = float(os.getenv("OPEN_DURATION", 3.0))
 CAMERA_ID = int(os.getenv("CAMERA_ID", 0))
 
-# --- CONFIGURAÇÃO DO SERVO COM RPi.GPIO ---
-# Transforma o tempo de pulso original em Duty Cycle (%)
-# 0.0010s (1ms) em um ciclo de 20ms (50Hz) = 5%
-# 0.0020s (2ms) em um ciclo de 20ms (50Hz) = 10%
-DUTY_FECHADO = 5.0  
-DUTY_ABERTO = 10.0  
+# --- CONFIGURAÇÃO DO SERVO COM pigpio ---
+# pigpio usa largura de pulso em microssegundos (µs)
+# Faixa clássica estendida: 500µs (0°) a 2500µs (180°)
+# Se notar que o motor força demais nas pontas, mude para 1000/2000.
+# O .env original não é mais usado diretamente porque pigpio não usa -1.0 a 1.0.
+PULSO_FECHADO_US = 1000 # Neutro baixo
+PULSO_ABERTO_US = 2000   # Neutro alto
 
-GPIO.setwarnings(False)
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(GPIO_PIN, GPIO.OUT)
-servo_pwm = GPIO.PWM(GPIO_PIN, 50) # Frequência de 50Hz
-servo_pwm.start(0)
+# Inicializa o pigpio
+pi = pigpio.pi()
+if not pi.connected:
+    print("ERRO: Não foi possível conectar ao daemon 'pigpiod'.")
+    print("Execute: sudo systemctl start pigpiod")
+    sys.exit(1)
 
-def mover_servo(duty_cycle):
-    """Move o servo usando hardware/C-level PWM que não trava com a IA"""
-    servo_pwm.ChangeDutyCycle(duty_cycle)
+# pigpio configura o pino automaticamente como saída para o servo
+
+def mover_servo_preciso(pulsewidth_us):
+    """
+    Move o servo usando DMA/Hardware PWM (não trava com a IA).
+    Atribui 0 para cortar o sinal após o movimento.
+    """
+    pi.set_servo_pulsewidth(GPIO_PIN, pulsewidth_us)
     time.sleep(0.5) # Tempo para o braço físico terminar de girar
-    servo_pwm.ChangeDutyCycle(0) # Corta o sinal para o servo não ficar "tremendo"
+    pi.set_servo_pulsewidth(GPIO_PIN, 0) # Corta o sinal (evita tremor)
 
 def main():
     if not os.path.exists(MODEL_PATH):
         print(f"Erro: Modelo não encontrado em {MODEL_PATH}")
+        pi.stop()
         return
 
     runner = ImageImpulseRunner(MODEL_PATH)
     
     # Trava a catraca inicialmente
     print("Posicionando catraca no estado fechado...")
-    mover_servo(DUTY_FECHADO)
+    mover_servo_preciso(PULSO_FECHADO_US)
     catraca_aberta = False
     ultimo_momento_visto = 0.0
     
@@ -79,7 +87,7 @@ def main():
             features, img_processada = runner.get_features_from_image(frame)
             res = runner.classify(features)
             
-            # Verifica detecção de objetos
+            # Verifica detecção de objetos e desenha
             if "bounding_boxes" in res["result"]:
                 for bb in res["result"]["bounding_boxes"]:
                     label = bb["label"]
@@ -103,29 +111,29 @@ def main():
             if vest_detectada:
                 ultimo_momento_visto = tempo_atual 
                 if not catraca_aberta:
-                    print(f"[{TARGET_LABEL}] detectado na tela! Abrindo catraca (Servo)...")
-                    mover_servo(DUTY_ABERTO)
+                    print(f"[{TARGET_LABEL}] detectado na tela! Abrindo catraca...")
+                    mover_servo_preciso(PULSO_ABERTO_US)
                     catraca_aberta = True
             else:
                 if catraca_aberta:
                     tempo_sem_ver = tempo_atual - ultimo_momento_visto
                     if tempo_sem_ver >= OPEN_TIME:
-                        print(f"[{TARGET_LABEL}] ausente da tela. Fechando catraca (Servo)...")
-                        mover_servo(DUTY_FECHADO)
+                        print(f"[{TARGET_LABEL}] ausente da tela. Fechando catraca...")
+                        mover_servo_preciso(PULSO_FECHADO_US)
                         catraca_aberta = False
 
     finally:
+        # Encerramento seguro
         if 'cap' in locals() and cap.isOpened():
             cap.release()
         if runner:
             runner.stop()
         cv2.destroyAllWindows()
         
-        # Trava o servo e limpa os pinos antes de fechar
-        mover_servo(DUTY_FECHADO)
-        servo_pwm.stop()
-        GPIO.cleanup()
-        print("\nSistema encerrado. Catraca travada e pinos liberados.")
+        # Trava o servo e libera pigpio antes de fechar
+        mover_servo_preciso(PULSO_FECHADO_US)
+        pi.stop()
+        print("\nSistema encerrado. Catraca travada e daemon pigpio liberado.")
 
 if __name__ == "__main__":
     main()
